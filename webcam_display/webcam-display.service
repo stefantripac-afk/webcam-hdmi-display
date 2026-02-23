@@ -1,0 +1,17 @@
+[Unit]
+Description=Webcam HDMI Display
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=pi
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/python3 /home/pi/webcam_display/main.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target
