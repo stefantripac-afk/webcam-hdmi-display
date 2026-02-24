@@ -9,6 +9,8 @@ import struct
 import cv2
 import numpy as np
 
+from framebuffer_setup import ensure_framebuffer
+
 # Linux framebuffer ioctl constants
 FBIOGET_VSCREENINFO = 0x4600
 FBIOGET_FSCREENINFO = 0x4602
@@ -56,6 +58,7 @@ class FramebufferDisplay:
         self.line_length = 0
 
     def open(self):
+        ensure_framebuffer(self.fb_device)
         self.fd = os.open(self.fb_device, os.O_RDWR)
 
         # Read variable screen info

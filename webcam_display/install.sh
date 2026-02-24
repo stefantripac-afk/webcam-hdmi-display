@@ -16,6 +16,13 @@ cp "$SCRIPT_DIR/main.py" "$APP_DIR/"
 cp "$SCRIPT_DIR/config.py" "$APP_DIR/"
 cp "$SCRIPT_DIR/capture.py" "$APP_DIR/"
 cp "$SCRIPT_DIR/display.py" "$APP_DIR/"
+cp "$SCRIPT_DIR/framebuffer_setup.py" "$APP_DIR/"
+
+# Quick framebuffer sanity check
+if [ ! -e /dev/fb0 ]; then
+    echo "WARNING: /dev/fb0 not found. The app will attempt to load it at runtime."
+    echo "If that fails, ensure a vc4 overlay is enabled in /boot/config.txt and reboot."
+fi
 
 # Create systemd unit
 echo "Creating systemd service..."
@@ -32,6 +39,7 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
+SupplementaryGroups=video
 
 [Install]
 WantedBy=multi-user.target
