@@ -1,47 +1,76 @@
 #!/usr/bin/env python3
-"""Capture from Logitech C270 webcam and display on HDMI via OpenCV."""
+"""Capture from Logitech C270 webcam and display fullscreen on HDMI via framebuffer."""
 
+import argparse
+import signal
 import sys
-import cv2
+import time
+
 import config
+from capture import WebcamCapture
+from display import FramebufferDisplay
+
+running = True
+
+
+def stop(signum, frame):
+    global running
+    running = False
 
 
 def main():
-    cap = cv2.VideoCapture(config.DEVICE_INDEX)
-    if not cap.isOpened():
-        print(f"Error: cannot open video device {config.DEVICE_INDEX}")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(
+        description="Webcam to HDMI framebuffer display")
+    parser.add_argument("-d", "--device", type=int,
+                        default=config.DEVICE_INDEX,
+                        help="Video device index")
+    parser.add_argument("-f", "--fb", default=config.FB_DEVICE,
+                        help="Framebuffer device path")
+    args = parser.parse_args()
 
-    if config.USE_MJPEG:
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    signal.signal(signal.SIGINT, stop)
+    signal.signal(signal.SIGTERM, stop)
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.CAPTURE_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.CAPTURE_HEIGHT)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, config.BUFFER_SIZE)
+    with WebcamCapture(
+        device_index=args.device,
+        width=config.CAPTURE_WIDTH,
+        height=config.CAPTURE_HEIGHT,
+        use_mjpeg=config.USE_MJPEG,
+        buffer_size=config.BUFFER_SIZE,
+    ) as cam, FramebufferDisplay(fb_device=args.fb) as fb:
 
-    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"Capturing at {actual_w}x{actual_h}")
+        frame_interval = 1.0 / config.TARGET_FPS
+        frame_count = 0
+        fps_start = time.monotonic()
 
-    cv2.namedWindow(config.WINDOW_NAME, cv2.WINDOW_NORMAL)
-    cv2.setWindowProperty(
-        config.WINDOW_NAME, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN
-    )
+        print(f"Streaming at target {config.TARGET_FPS} FPS. "
+              "Press Ctrl+C to stop.")
 
-    try:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                print("Error: failed to grab frame")
-                break
+        while running:
+            loop_start = time.monotonic()
 
-            cv2.imshow(config.WINDOW_NAME, frame)
+            frame = cam.read()
+            if frame is None:
+                print("Warning: failed to grab frame, retrying...")
+                time.sleep(0.1)
+                continue
 
-            if cv2.waitKey(1) & 0xFF == 27:  # ESC to quit
-                break
-    finally:
-        cap.release()
-        cv2.destroyAllWindows()
+            fb.show(frame)
+            frame_count += 1
+
+            # Print FPS every 5 seconds
+            elapsed = time.monotonic() - fps_start
+            if elapsed >= 5.0:
+                print(f"FPS: {frame_count / elapsed:.1f}")
+                frame_count = 0
+                fps_start = time.monotonic()
+
+            # Throttle to target FPS
+            spent = time.monotonic() - loop_start
+            if spent < frame_interval:
+                time.sleep(frame_interval - spent)
+
+    print("Shutdown complete.")
 
 
 if __name__ == "__main__":

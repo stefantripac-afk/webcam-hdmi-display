@@ -5,19 +5,37 @@
 set -e
 
 SERVICE_NAME="webcam-display"
-SERVICE_FILE="$(dirname "$0")/${SERVICE_NAME}.service"
 APP_DIR="/home/pi/webcam_display"
 SYSTEMD_DIR="/etc/systemd/system"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Copy application files
 echo "Copying application to ${APP_DIR}..."
 mkdir -p "$APP_DIR"
-cp "$(dirname "$0")/main.py" "$APP_DIR/"
-cp "$(dirname "$0")/config.py" "$APP_DIR/"
+cp "$SCRIPT_DIR/main.py" "$APP_DIR/"
+cp "$SCRIPT_DIR/config.py" "$APP_DIR/"
+cp "$SCRIPT_DIR/capture.py" "$APP_DIR/"
+cp "$SCRIPT_DIR/display.py" "$APP_DIR/"
 
-# Install systemd unit
-echo "Installing systemd service..."
-cp "$SERVICE_FILE" "${SYSTEMD_DIR}/${SERVICE_NAME}.service"
+# Create systemd unit
+echo "Creating systemd service..."
+cat > "${SYSTEMD_DIR}/${SERVICE_NAME}.service" <<EOF
+[Unit]
+Description=Webcam to HDMI Display
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 ${APP_DIR}/main.py
+WorkingDirectory=${APP_DIR}
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
